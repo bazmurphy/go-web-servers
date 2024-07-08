@@ -48,6 +48,31 @@ func TestApp(t *testing.T) {
 func TestAssets(t *testing.T) {
 	client := Setup(t)
 
+	response, err := client.Get("http://localhost:8080/app/assets/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusOK), response.Status)
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(string(body))
+
+	containsLink := strings.Contains(string(body), "<a href=\"logo.png\">logo.png</a>")
+	if !containsLink {
+		t.Errorf("expected %v | got %v", true, containsLink)
+	}
+}
+
+func TestAssetsImage(t *testing.T) {
+	client := Setup(t)
+
 	response, err := client.Get("http://localhost:8080/app/assets/logo.png")
 	if err != nil {
 		t.Fatal(err)

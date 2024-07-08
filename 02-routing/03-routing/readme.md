@@ -32,3 +32,14 @@ mux.HandleFunc("POST /articles", handlerArticlesCreate) mux.HandleFunc("DELETE /
 ```
 
 When a request is made to one of these endpoints with a method other than `GET`, the server should return a `405` (Method Not Allowed) response (this is handled automatically!).
+
+## Tests:
+
+1. GET /app
+   1. Expecting status code: 200
+   1. Expecting body to contain: Welcome to Chirpy
+2. GET /app/assets/
+   1. Expecting status code: 200
+   1. Expecting body to contain: <a href="logo.png">logo.png</a>
+3. POST /healthz
+   1. Expecting status code: 405
