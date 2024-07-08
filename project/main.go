@@ -16,15 +16,16 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/app/*", cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
-
+	handleFiles := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
+	mux.Handle("/app/*", cfg.middlewareMetricsInc(handleFiles))
 	mux.HandleFunc("/healthz", handleReadiness)
 	mux.HandleFunc("/metrics", cfg.handleMetrics)
 	mux.HandleFunc("/reset", cfg.handleReset)
 
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
+		Addr: ":" + port,
+		// to apply middleware to all routes we wrap the mux in it
+		Handler: middlewareLog(mux),
 	}
 
 	log.Printf("serving files from %s on port: %s\n", filepathRoot, port)
@@ -35,6 +36,13 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
+}
+
+func middlewareLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
 }
 
 type apiConfig struct {
