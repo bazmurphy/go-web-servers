@@ -95,7 +95,7 @@ func TestAssetsImage(t *testing.T) {
 func TestHealthz(t *testing.T) {
 	client := Setup(t)
 
-	response, err := client.Get("http://localhost:8080/healthz")
+	response, err := client.Get("http://localhost:8080/api/healthz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestMetrics(t *testing.T) {
 		defer response.Body.Close()
 	}
 
-	response, err := client.Get("http://localhost:8080/metrics")
+	response, err := client.Get("http://localhost:8080/api/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestReset(t *testing.T) {
 		defer response.Body.Close()
 	}
 
-	response, err := client.Get("http://localhost:8080/reset")
+	response, err := client.Get("http://localhost:8080/api/reset")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,21 +194,21 @@ func TestReset(t *testing.T) {
 func TestMethodRestriction(t *testing.T) {
 	client := Setup(t)
 
-	response, err := client.Post("http://localhost:8080/healthz", "", nil)
+	response, err := client.Post("http://localhost:8080/api/healthz", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
 	}
-	response, err = client.Post("http://localhost:8080/metrics", "", nil)
+	response, err = client.Post("http://localhost:8080/api/metrics", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
 	}
-	response, err = client.Post("http://localhost:8080/reset", "", nil)
+	response, err = client.Post("http://localhost:8080/api/reset", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

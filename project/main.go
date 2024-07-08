@@ -6,21 +6,26 @@ import (
 	"net/http"
 )
 
+type apiConfig struct {
+	fileserverHits int
+}
+
 func main() {
 	const (
 		port         = "8080"
 		filepathRoot = "."
 	)
 
-	cfg := &apiConfig{}
+	cfg := &apiConfig{
+		fileserverHits: 0,
+	}
 
 	mux := http.NewServeMux()
-
-	handleFiles := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
-	mux.Handle("/app/*", cfg.middlewareMetricsInc(handleFiles))
-	mux.HandleFunc("GET /healthz", handleReadiness)
-	mux.HandleFunc("GET /metrics", cfg.handleMetrics)
-	mux.HandleFunc("GET /reset", cfg.handleReset)
+	handlerFileserver := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
+	mux.Handle("/app/*", cfg.middlewareMetricsInc(handlerFileserver))
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/metrics", cfg.handlerMetrics)
+	mux.HandleFunc("GET /api/reset", cfg.handlerReset)
 
 	server := &http.Server{
 		Addr: ":" + port,
@@ -32,12 +37,6 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func handleReadiness(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(http.StatusText(http.StatusOK)))
-}
-
 func middlewareLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
@@ -45,8 +44,10 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
-type apiConfig struct {
-	fileserverHits int
+func handlerReadiness(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -56,13 +57,13 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("Hits: %d", cfg.fileserverHits)))
 }
 
-func (cfg *apiConfig) handleReset(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits = 0
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("Hits reset to %d", cfg.fileserverHits)))
