@@ -165,3 +165,29 @@ func TestReset(t *testing.T) {
 		t.Errorf("expected %s | got %s", expectedBody, string(body))
 	}
 }
+
+func TestMethodRestriction(t *testing.T) {
+	client := Setup(t)
+
+	response, err := client.Post("http://localhost:8080/healthz", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
+	}
+	response, err = client.Post("http://localhost:8080/metrics", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
+	}
+	response, err = client.Post("http://localhost:8080/reset", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
+	}
+}
