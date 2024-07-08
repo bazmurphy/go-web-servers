@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -126,7 +127,9 @@ func TestHealthz(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	client := Setup(t)
 
-	for i := 0; i < 5; i++ {
+	visitCount := 5
+
+	for i := 0; i < visitCount; i++ {
 		response, err := client.Get("http://localhost:8080/app")
 		if err != nil {
 			t.Fatal(err)
@@ -134,7 +137,7 @@ func TestMetrics(t *testing.T) {
 		defer response.Body.Close()
 	}
 
-	response, err := client.Get("http://localhost:8080/api/metrics")
+	response, err := client.Get("http://localhost:8080/api/admin/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,10 +153,10 @@ func TestMetrics(t *testing.T) {
 	}
 	t.Log(string(body))
 
-	expectedBody := "Hits: 5"
+	containsVisitCount := strings.Contains(string(body), fmt.Sprintf("<p>Chirpy has been visited %d times!</p>", visitCount))
 
-	if string(body) != expectedBody {
-		t.Errorf("expected %s | got %s", expectedBody, string(body))
+	if !containsVisitCount {
+		t.Errorf("expected %v | got %v", true, containsVisitCount)
 	}
 }
 
@@ -168,7 +171,7 @@ func TestReset(t *testing.T) {
 		defer response.Body.Close()
 	}
 
-	response, err := client.Get("http://localhost:8080/api/reset")
+	response, err := client.Get("http://localhost:8080/api/admin/reset")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,14 +204,14 @@ func TestMethodRestriction(t *testing.T) {
 	if response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
 	}
-	response, err = client.Post("http://localhost:8080/api/metrics", "", nil)
+	response, err = client.Post("http://localhost:8080/api/admin/metrics", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %s | got %s", http.StatusText(http.StatusMethodNotAllowed), response.Status)
 	}
-	response, err = client.Post("http://localhost:8080/api/reset", "", nil)
+	response, err = client.Post("http://localhost:8080/api/admin/reset", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
