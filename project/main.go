@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,6 +25,8 @@ func main() {
 
 	handlerFileserver := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 	mux.Handle("/app/*", cfg.middlewareMetricsInc(handlerFileserver))
+
+	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
 
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 
@@ -51,6 +54,69 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
+}
+
+type Chirp struct {
+	Body string `json:"body"`
+}
+
+type Response struct {
+	Error string `json:"error,omitempty"` // (!) the omitempty tag tells the JSON encoder to omit the field if it's empty
+	Valid bool   `json:"valid,omitempty"`
+}
+
+func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+
+	chirp := Chirp{}
+	err := decoder.Decode(&chirp)
+	if err != nil {
+		response := Response{
+			Error: "Something went wrong",
+		}
+		jsonResponseBody, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+		log.Println(string(jsonResponseBody))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(500)
+		w.Write(jsonResponseBody)
+		return
+	}
+
+	if len(chirp.Body) > 140 {
+		response := Response{
+			Error: "Chirp is too long",
+		}
+		jsonResponseBody, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+		log.Println(string(jsonResponseBody))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		w.Write(jsonResponseBody)
+		return
+	}
+
+	response := Response{
+		Valid: true,
+	}
+	jsonResponseBody, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	log.Println(string(jsonResponseBody))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(jsonResponseBody)
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
