@@ -223,22 +223,37 @@ func TestValidateChirp(t *testing.T) {
 		name               string
 		requestBody        Chirp
 		expectedStatusCode int
-		expectedValid      bool
-		expectedError      string
+		expectedBody       Response
 	}{
 		{
 			name:               "valid chirp",
 			requestBody:        Chirp{Body: "I had something interesting for breakfast"},
 			expectedStatusCode: http.StatusOK,
-			expectedValid:      true,
-			expectedError:      "",
+			expectedBody:       Response{Valid: true},
 		},
 		{
 			name:               "invalid chirp",
 			requestBody:        Chirp{Body: "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedValid:      false,
-			expectedError:      "Chirp is too long",
+			expectedBody:       Response{Error: "Chirp is too long"},
+		},
+		{
+			name:               "profane chirp 1",
+			requestBody:        Chirp{Body: "This is a kerfuffle opinion I need to share with the world"},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       Response{CleanedBody: "This is a **** opinion I need to share with the world"},
+		},
+		{
+			name:               "profane chirp 2",
+			requestBody:        Chirp{Body: "I hear Mastodon is better than Chirpy. sharbert I need to migrate"},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       Response{CleanedBody: "I hear Mastodon is better than Chirpy. **** I need to migrate"},
+		},
+		{
+			name:               "profane chirp 3",
+			requestBody:        Chirp{Body: "I really need a kerfuffle to go to bed sooner, Fornax !"},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       Response{CleanedBody: "I really need a **** to go to bed sooner, **** !"},
 		},
 	}
 
@@ -275,11 +290,8 @@ func TestValidateChirp(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if responseJSON.Valid != tc.expectedValid {
-				t.Errorf("expected json key 'valid': %t | got %t", tc.expectedValid, responseJSON.Valid)
-			}
-			if responseJSON.Error != tc.expectedError {
-				t.Errorf("expected json key 'error': %s | got %s", tc.expectedError, responseJSON.Error)
+			if responseJSON != tc.expectedBody {
+				t.Errorf("expected %v | got %v", tc.expectedBody, responseJSON)
 			}
 		})
 	}

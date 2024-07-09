@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type apiConfig struct {
@@ -61,8 +62,10 @@ type Chirp struct {
 }
 
 type Response struct {
-	Error string `json:"error,omitempty"` // (!) the omitempty tag tells the JSON encoder to omit the field if it's empty
-	Valid bool   `json:"valid,omitempty"`
+	// (!) the omitempty tag tells the JSON encoder to omit the field if it's empty
+	Error       string `json:"error,omitempty"`
+	Valid       bool   `json:"valid,omitempty"`
+	CleanedBody string `json:"cleaned_body,omitempty"`
 }
 
 func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
@@ -74,16 +77,17 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Error: "Something went wrong",
 		}
-		jsonResponseBody, err := json.Marshal(response)
+		byteData, err := json.Marshal(response)
 		if err != nil {
 			log.Printf("error marshalling JSON: %s", err)
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(500)
 			return
 		}
-		log.Println(string(jsonResponseBody))
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(500)
-		w.Write(jsonResponseBody)
+		w.Write(byteData)
 		return
 	}
 
@@ -91,32 +95,61 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Error: "Chirp is too long",
 		}
-		jsonResponseBody, err := json.Marshal(response)
+		byteData, err := json.Marshal(response)
 		if err != nil {
 			log.Printf("error marshalling JSON: %s", err)
 			w.WriteHeader(500)
 			return
 		}
-		log.Println(string(jsonResponseBody))
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(400)
-		w.Write(jsonResponseBody)
+		w.Write(byteData)
+		return
+	}
+
+	profaneWords := []string{"kerfuffle", "sharbert", "fornax"}
+
+	wordsSplit := strings.Split(chirp.Body, " ")
+	for index, word := range wordsSplit {
+		for _, profaneWord := range profaneWords {
+			if strings.ToLower(word) == profaneWord {
+				wordsSplit[index] = "****"
+			}
+		}
+	}
+	wordsRejoined := strings.Join(wordsSplit, " ")
+
+	if chirp.Body != wordsRejoined {
+		response := Response{
+			CleanedBody: wordsRejoined,
+		}
+		byteData, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(byteData)
 		return
 	}
 
 	response := Response{
 		Valid: true,
 	}
-	jsonResponseBody, err := json.Marshal(response)
+	byteData, err := json.Marshal(response)
 	if err != nil {
 		log.Printf("error marshalling JSON: %s", err)
 		w.WriteHeader(500)
 		return
 	}
-	log.Println(string(jsonResponseBody))
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	w.Write(jsonResponseBody)
+	w.Write(byteData)
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
