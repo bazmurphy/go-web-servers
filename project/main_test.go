@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,11 +18,9 @@ func Setup(t *testing.T) *http.Client {
 	t.Helper()
 
 	go main()
-
 	time.Sleep(100 * time.Millisecond)
 
 	client := &http.Client{}
-
 	return client
 }
 
@@ -259,17 +260,17 @@ func TestValidateChirp(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			jsonRequestBody, err := json.Marshal(tc.requestBody)
+			requestBodyJson, err := json.Marshal(tc.requestBody)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			// we use `bytes.NewReader` on the JSON request body for three main reasons:
+			// we use `bytes.NewReader` on the request body JSON for three main reasons:
 			// 1. Interface compatibility: It converts the byte slice to an `io.Reader`, which is required by `http.NewRequest`.
 			// 2. Efficiency: It creates a reader without copying the data, using less memory than alternatives like `bytes.Buffer`.
 			// 3. Simplicity: It provides a read-only view of the data, which is sufficient for sending an HTTP request.
 			// this approach is memory-efficient, simple, and aligns with Go's idiomatic practices for handling byte slices in HTTP requests.
-			response, err := client.Post("http://localhost:8080/api/validate_chirp", "application/json", bytes.NewReader(jsonRequestBody))
+			response, err := client.Post("http://localhost:8080/api/validate_chirp", "application/json", bytes.NewReader(requestBodyJson))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -277,6 +278,10 @@ func TestValidateChirp(t *testing.T) {
 
 			if response.StatusCode != tc.expectedStatusCode {
 				t.Errorf("expected status code %d | got %d", tc.expectedStatusCode, response.StatusCode)
+			}
+
+			if response.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("expected Content-Type %s | got %s", "application/json", response.Header.Get("Content-Type"))
 			}
 
 			byteData, err := io.ReadAll(response.Body)
@@ -294,5 +299,133 @@ func TestValidateChirp(t *testing.T) {
 				t.Errorf("expected %v | got %v", tc.expectedBody, responseJSON)
 			}
 		})
+	}
+}
+
+func TestPostChirps(t *testing.T) {
+	DeleteDBFile(t)
+
+	client := Setup(t)
+
+	requestBody := Chirp{Body: "I had something interesting for breakfast"}
+
+	requestBodyJson, err := json.Marshal(requestBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := client.Post("http://localhost:8080/api/chirps", "application/json", bytes.NewReader(requestBodyJson))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusCreated {
+		t.Errorf("expected status code %d | got %d", http.StatusCreated, response.StatusCode)
+	}
+
+	if response.Header.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type %s | got %s", "application/json", response.Header.Get("Content-Type"))
+	}
+
+	byteData, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var responseJSON Response
+	err = json.Unmarshal(byteData, &responseJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if responseJSON.Body != requestBody.Body {
+		t.Errorf("expected %v | got %v", requestBody.Body, responseJSON.Body)
+	}
+}
+
+func TestGetChirps(t *testing.T) {
+	// TODO (!) in order to pass the above POST function has to run
+	client := Setup(t)
+
+	response, err := client.Get("http://localhost:8080/api/chirps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("expected status code %d | got %d", http.StatusOK, response.StatusCode)
+	}
+
+	if response.Header.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type %s | got %s", "application/json", response.Header.Get("Content-Type"))
+	}
+
+	byteData, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var chirps []Chirp
+	err = json.Unmarshal(byteData, &chirps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedChirps := []Chirp{
+		{
+			ID:   1,
+			Body: "I had something interesting for breakfast",
+		},
+	}
+
+	if !reflect.DeepEqual(chirps, expectedChirps) {
+		t.Errorf("expected %v | got %v", expectedChirps, chirps)
+	}
+}
+
+func TestDB(t *testing.T) {
+	DeleteDBFile(t)
+
+	dbDisk, err := NewDB("database.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		_, err := dbDisk.CreateChirp(fmt.Sprintf("body-value-%d", i+1))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	chirps, err := dbDisk.GetChirps()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedChirps := []Chirp{
+		{ID: 1, Body: "body-value-1"},
+		{ID: 2, Body: "body-value-2"},
+		{ID: 3, Body: "body-value-3"},
+	}
+
+	if !reflect.DeepEqual(expectedChirps, chirps) {
+		t.Errorf("expected %v | got %v", expectedChirps, chirps)
+	}
+}
+
+func DeleteDBFile(t *testing.T) {
+	t.Helper()
+	_, err := os.Stat("database.json")
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+	}
+	err = os.Remove("database.json")
+	if err != nil {
+		t.Fatal(err)
 	}
 }
